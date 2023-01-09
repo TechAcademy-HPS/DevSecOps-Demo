@@ -1,0 +1,71 @@
+def buildno = BUILD_NUMBER
+pipeline {
+    agent any
+    tools {
+        maven "maven3.6.3"
+    }
+	
+    stages {
+      	
+         stage('Build'){
+             steps{
+		    sh "mvn clean package"
+	              }
+        } 
+	stage('sonar') {
+            steps {
+		    script {
+                       withSonarQubeEnv('SonarQubeSrvr') {
+                       sh "mvn sonar:sonar"
+                      }
+		      timeout(time: 1, unit: 'HOURS') {
+                      def qg = waitForQualityGate()
+                      if (qg.status != 'OK') {
+                           error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                      }
+                    }
+                 }
+	      }
+           }
+	stage('upload to nexus') {
+            steps {
+                nexusArtifactUploader artifacts: [
+				[
+				artifactId: 'demo',
+				classifier: '',
+				file: 'target/demo-2.0.0-SNAPSHOT.war',
+				type: 'war'
+				]
+				],
+				credentialsId: 'nexuscredentials',
+				groupId: 'com.domain',
+				nexusUrl: '18.182.17.242:8081',
+				nexusVersion: 'nexus3',
+				protocol: 'http',
+				repository: 'demo',
+				version: '2.0.0-SNAPSHOT'
+            }
+        }   
+	   stage('Deploy'){
+              steps{
+		    sshagent(['tomcat credentials']) {
+                   sh "scp -o StrictHostKeyChecking=no /var/lib/jenkins/workspace/DevSecOps/target/*.war  ubuntu@18.181.170.72:/var/lib/apache-tomcat-9.0.70/webapps" 
+                  }
+              }
+        } 
+		
+	  stage('OWASP ZAP'){
+                 steps{
+		            sh 'docker run  --user root -v $(pwd)/zap-report:/zap/wrk/:rw -t owasp/zap2docker-stable zap-baseline.py -t http://18.181.170.72:8080/demo-2.0.0-SNAPSHOT -r stable-baselinescan.html || true'
+	              }
+        }
+	
+	    stage('HTML'){
+		   steps{
+	               publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'zap-report/', reportFiles: 'stable-baselinescan.html', reportName: 'HTML Report', reportTitles: '', useWrapperFileDirectly: true])
+	      }
+		 }
+
+     }
+
+}
