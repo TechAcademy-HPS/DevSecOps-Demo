@@ -57,7 +57,11 @@ pipeline {
                  steps{
 		            sh 'docker run  --user root -v $(pwd)/zap-report:/zap/wrk/:rw -t owasp/zap2docker-stable zap-baseline.py -t http://13.231.213.27:8080/spring-boot-thymeleaf-2.0.0 -r stable-baselinescan.html'
 	              }
-        }	
+        }
+	stage('HTML'){
+		   steps{
+	               publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'zap-report/', reportFiles: 'stable-baselinescan.html', reportName: 'HTML Report', reportTitles: '', useWrapperFileDirectly: true])
+	      }
 	 /* stage('OWASP ZAP'){
                  steps{
 		            sh 'docker run  --user root -v $(pwd)/zap-report:/zap/wrk/:rw -t owasp/zap2docker-stable zap-baseline.py -t http://13.231.213.27:8080/demo-2.0.0-SNAPSHOT -r stable-baselinescan.html || true'
